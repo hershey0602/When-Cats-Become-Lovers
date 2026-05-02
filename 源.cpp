@@ -121,6 +121,43 @@ static wchar_t gCatSelectQuestionText[] = L"请领一只回家吧（不可以全
 static vector<int> gChoiceHistory;
 static bool gShowStartButton = false;
 
+static HFONT getCachedUiFont(int pixelHeight, int weight = FW_NORMAL) {
+    struct FontSlot {
+        int size = 0;
+        int fontWeight = 0;
+        HFONT handle = nullptr;
+    };
+    static FontSlot slots[8] = {};
+
+    for (FontSlot& slot : slots) {
+        if (slot.handle != nullptr && slot.size == pixelHeight && slot.fontWeight == weight) {
+            return slot.handle;
+        }
+    }
+
+    for (FontSlot& slot : slots) {
+        if (slot.handle == nullptr) {
+            slot.size = pixelHeight;
+            slot.fontWeight = weight;
+            slot.handle = CreateFontW(
+                -pixelHeight,
+                0, 0, 0,
+                weight,
+                FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS,
+                CLIP_DEFAULT_PRECIS,
+                CLEARTYPE_QUALITY,
+                DEFAULT_PITCH | FF_DONTCARE,
+                L"Microsoft YaHei UI"
+            );
+            return slot.handle;
+        }
+    }
+
+    return static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+}
+
 static bool pointInRect(int x, int y, const RECT& rc) {
     return x >= rc.left && x <= rc.right && y >= rc.top && y <= rc.bottom;
 }
@@ -490,10 +527,10 @@ static void buildRoundedRect(GraphicsPath& path, const RectF& rect, float radius
 }
 
 static void updateStartLayout(const RECT& clientRect) {
-    gTopRightButtonRect.left = clientRect.right - 124;
+    gTopRightButtonRect.left = clientRect.right - 252;
     gTopRightButtonRect.top = 24;
     gTopRightButtonRect.right = clientRect.right - 28;
-    gTopRightButtonRect.bottom = 74;
+    gTopRightButtonRect.bottom = 86;
 
     int titleWidth = 980;
     int titleHeight = 220;
@@ -515,10 +552,10 @@ static void updateStartLayout(const RECT& clientRect) {
 }
 
 static void updateCatSelectLayout(const RECT& clientRect) {
-    gTopRightButtonRect.left = clientRect.right - 124;
+    gTopRightButtonRect.left = clientRect.right - 252;
     gTopRightButtonRect.top = 24;
     gTopRightButtonRect.right = clientRect.right - 28;
-    gTopRightButtonRect.bottom = 74;
+    gTopRightButtonRect.bottom = 86;
 
     gBottomDialogRect.left = 85;
     gBottomDialogRect.right = clientRect.right - 85;
@@ -550,10 +587,10 @@ static void updateCatSelectLayout(const RECT& clientRect) {
 }
 
 static void updateProfileSetupLayout(const RECT& clientRect) {
-    gTopRightButtonRect.left = clientRect.right - 124;
+    gTopRightButtonRect.left = clientRect.right - 252;
     gTopRightButtonRect.top = 24;
     gTopRightButtonRect.right = clientRect.right - 28;
-    gTopRightButtonRect.bottom = 74;
+    gTopRightButtonRect.bottom = 86;
 
     int centerX = clientRect.right / 2;
     gGenderQuestionRect.left = centerX - 380;
@@ -591,10 +628,10 @@ static void updateProfileSetupLayout(const RECT& clientRect) {
 }
 
 static void updateStoryLayout(const RECT& clientRect) {
-    gTopRightButtonRect.left = clientRect.right - 124;
+    gTopRightButtonRect.left = clientRect.right - 252;
     gTopRightButtonRect.top = 24;
     gTopRightButtonRect.right = clientRect.right - 28;
-    gTopRightButtonRect.bottom = 74;
+    gTopRightButtonRect.bottom = 86;
 
     gBottomDialogRect.left = 85;
     gBottomDialogRect.right = clientRect.right - 85;
@@ -613,10 +650,10 @@ static void updateStoryLayout(const RECT& clientRect) {
 }
 
 static void updateEndingLayout(const RECT& clientRect) {
-    gTopRightButtonRect.left = clientRect.right - 124;
+    gTopRightButtonRect.left = clientRect.right - 252;
     gTopRightButtonRect.top = 24;
     gTopRightButtonRect.right = clientRect.right - 28;
-    gTopRightButtonRect.bottom = 74;
+    gTopRightButtonRect.bottom = 86;
 
     int centerX = clientRect.right / 2;
     gEndingTitleRect.left = centerX - 320;
@@ -970,13 +1007,16 @@ static void resetToStart(HWND hwnd) {
     gChoiceHistory.clear();
     gVisibleDialogueChars = 0;
     gDialogueFullyShown = false;
+    gShowStartButton = false;
     closePromptModal();
+    KillTimer(hwnd, 2);
     KillTimer(hwnd, 1);
     if (gNameEdit != nullptr) {
         SetWindowTextW(gNameEdit, L"");
     }
     gCurrentPage = UiPageStart;
     syncPageControls(hwnd);
+    SetTimer(hwnd, 2, 1000, nullptr);
     InvalidateRect(hwnd, nullptr, FALSE);
 }
 
@@ -993,7 +1033,9 @@ static void restartGameFlow(HWND hwnd) {
     gChoiceHistory.clear();
     gVisibleDialogueChars = 0;
     gDialogueFullyShown = false;
+    gShowStartButton = false;
     closePromptModal();
+    KillTimer(hwnd, 2);
     KillTimer(hwnd, 1);
     if (gNameEdit != nullptr) {
         SetWindowTextW(gNameEdit, L"");
@@ -1219,11 +1261,21 @@ static void drawTopRightHomeButton(Graphics& g) {
         static_cast<REAL>(gTopRightButtonRect.bottom - gTopRightButtonRect.top)
     );
 
-    SolidBrush fillBrush(Color(220, 255, 246, 238));
-    Pen edgePen(Color(220, 190, 148, 118), 2.0f);
-    g.FillRectangle(&fillBrush, buttonRect);
-    g.DrawRectangle(&edgePen, buttonRect);
-    drawSimpleCenterText(g, L"返回上一个选项", buttonRect, 16.0f, Color(255, 98, 74, 64));
+    drawRoundedPanel(
+        g,
+        buttonRect,
+        Color(238, 255, 248, 240),
+        Color(246, 244, 223, 196),
+        Color(230, 188, 150, 126)
+    );
+
+    RectF glossRect(buttonRect.X + 12.0f, buttonRect.Y + 8.0f, buttonRect.Width - 24.0f, 16.0f);
+    GraphicsPath glossPath;
+    buildRoundedRect(glossPath, glossRect, 8.0f);
+    SolidBrush glossBrush(Color(72, 255, 255, 252));
+    g.FillPath(&glossBrush, &glossPath);
+
+    drawSimpleCenterText(g, L"返回上一个选项", buttonRect, 18.0f, Color(255, 98, 74, 64));
 }
 
 static void drawQuestionPanel(Graphics& g) {
@@ -1395,18 +1447,7 @@ static void drawPlainWrappedText(Graphics& g, const wchar_t* text, const RectF& 
     HDC hdc = g.GetHDC();
     int oldBkMode = SetBkMode(hdc, TRANSPARENT);
     COLORREF oldColor = SetTextColor(hdc, RGB(35, 35, 35));
-    HFONT font = CreateFontW(
-        -static_cast<int>(size),
-        0, 0, 0,
-        FW_NORMAL,
-        FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET,
-        OUT_DEFAULT_PRECIS,
-        CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE,
-        L"Microsoft YaHei UI"
-    );
+    HFONT font = getCachedUiFont(static_cast<int>(size), FW_NORMAL);
     HFONT oldFont = static_cast<HFONT>(SelectObject(hdc, font));
     int savedDc = SaveDC(hdc);
     RECT textRect = {
@@ -1425,7 +1466,6 @@ static void drawPlainWrappedText(Graphics& g, const wchar_t* text, const RectF& 
     );
     RestoreDC(hdc, savedDc);
     SelectObject(hdc, oldFont);
-    DeleteObject(font);
     SetTextColor(hdc, oldColor);
     SetBkMode(hdc, oldBkMode);
     g.ReleaseHDC(hdc);
@@ -1634,13 +1674,20 @@ static void drawEndingPage(Graphics& g, const RECT& clientRect) {
     drawChoiceButton(g, gEndingButtons[2], L"结束游戏", false);
 }
 
+static void invalidateStoryDialogueArea(HWND hwnd) {
+    RECT dirty = gBottomDialogRect;
+    dirty.left -= 8;
+    dirty.top -= 8;
+    dirty.right += 8;
+    dirty.bottom += 8;
+    InvalidateRect(hwnd, &dirty, FALSE);
+}
+
 static void paintScene(HWND hwnd) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT clientRect = {};
     GetClientRect(hwnd, &clientRect);
-    updateStartLayout(clientRect);
-    updatePromptLayout(clientRect);
 
     HDC memDc = CreateCompatibleDC(hdc);
     HBITMAP backBuffer = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
@@ -1677,7 +1724,9 @@ static void paintScene(HWND hwnd) {
             graphics.FillRectangle(&fallbackBrush, 0, 0, clientRect.right, clientRect.bottom);
         }
 
-        drawStartButton(graphics);
+        if (gShowStartButton) {
+            drawStartButton(graphics);
+        }
     } else if (gCurrentPage == UiPageCatSelect) {
         updateCatSelectLayout(clientRect);
         drawCatSelectPage(graphics, clientRect);
@@ -1693,6 +1742,7 @@ static void paintScene(HWND hwnd) {
     }
 
     if (gPromptVisible) {
+        updatePromptLayout(clientRect);
         drawPromptModal(graphics, clientRect);
     }
 
@@ -1748,8 +1798,12 @@ static LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
                     gDialogueFullyShown = true;
                     KillTimer(hwnd, 1);
                 }
-                InvalidateRect(hwnd, nullptr, FALSE);
+                invalidateStoryDialogueArea(hwnd);
             }
+        } else if (wParam == 2 && gCurrentPage == UiPageStart) {
+            gShowStartButton = true;
+            KillTimer(hwnd, 2);
+            InvalidateRect(hwnd, nullptr, FALSE);
         }
         return 0;
     case WM_CTLCOLOREDIT: {
@@ -1777,7 +1831,7 @@ static LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             return 0;
         }
         if (gCurrentPage == UiPageStart) {
-            if (pointInRect(x, y, gStartButtonRect)) {
+            if (gShowStartButton && pointInRect(x, y, gStartButtonRect)) {
                 gCurrentPage = UiPageCatSelect;
                 syncPageControls(hwnd);
                 InvalidateRect(hwnd, nullptr, FALSE);
@@ -1822,7 +1876,7 @@ static LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
                 gVisibleDialogueChars = static_cast<int>(gCurrentDialogueText.size());
                 gDialogueFullyShown = true;
                 KillTimer(hwnd, 1);
-                InvalidateRect(hwnd, nullptr, FALSE);
+                invalidateStoryDialogueArea(hwnd);
             } else {
                 advanceStory(hwnd);
             }
@@ -1855,6 +1909,7 @@ static bool showStartWindow(HINSTANCE instance) {
     }
 
     gCurrentPage = UiPageStart;
+    gShowStartButton = false;
     gSelectedBreedChoice = 0;
     gSelectedGenderChoice = 0;
     gSelectedCatName.clear();
@@ -2023,6 +2078,7 @@ static bool showStartWindow(HINSTANCE instance) {
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
     syncPageControls(hwnd);
+    SetTimer(hwnd, 2, 1000, nullptr);
 
     MSG msg = {};
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
